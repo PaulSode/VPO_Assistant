@@ -4,12 +4,13 @@
  * tinting works without per-icon CSS rules.
  */
 
-type Props = { size?: number; className?: string };
+type Props = { size?: number; className?: string; style?: React.CSSProperties };
 
 const Ico = ({
   size = 14,
   children,
   className,
+  style,
 }: Props & { children: React.ReactNode }) => (
   <svg
     width={size}
@@ -21,6 +22,7 @@ const Ico = ({
     strokeLinecap="round"
     strokeLinejoin="round"
     className={className}
+    style={style}
     aria-hidden
   >
     {children}
@@ -130,6 +132,26 @@ export const IconBox = (p: Props) => (
 export const IconCheck = (p: Props) => (
   <Ico {...p}>
     <path d="M20 6 9 17l-5-5" />
+  </Ico>
+);
+
+export const IconPaperclip = (p: Props) => (
+  <Ico {...p}>
+    <path d="M21 8.5 12.7 16.8a4 4 0 0 1-5.7-5.7l8-8a2.5 2.5 0 0 1 3.5 3.5l-8 8a1 1 0 0 1-1.4-1.4l7.3-7.3" />
+  </Ico>
+);
+
+export const IconImport = (p: Props) => (
+  <Ico {...p}>
+    <path d="M12 3v12M8 11l4 4 4-4" />
+    <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+  </Ico>
+);
+
+export const IconCopy = (p: Props) => (
+  <Ico {...p}>
+    <rect x="9" y="9" width="11" height="11" rx="2" />
+    <path d="M5 15V5a2 2 0 0 1 2-2h8" />
   </Ico>
 );
 

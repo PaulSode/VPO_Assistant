@@ -6,6 +6,8 @@ import { DashboardPage } from './pages/DashboardPage';
 import { TicketsListPage } from './pages/TicketsListPage';
 import { TicketDetailPage } from './pages/TicketDetailPage';
 import { ClientContextPage } from './pages/ClientContextPage';
+import { ClientDocumentsPage } from './pages/ClientDocumentsPage';
+import { GlobalKnowledgePage } from './pages/GlobalKnowledgePage';
 import { AssistantPage } from './pages/AssistantPage';
 import { SearchPage } from './pages/SearchPage';
 
@@ -15,6 +17,7 @@ export function App() {
       <ErrorBoundary>
         <Routes>
           <Route path="/" element={<ClientsListPage />} />
+          <Route path="/knowledge" element={<GlobalKnowledgePage />} />
 
           {/* Every client page shares the navigation shell */}
           <Route path="/clients/:clientId" element={<WorkspaceLayout />}>
@@ -22,6 +25,7 @@ export function App() {
             <Route path="tickets" element={<TicketsListPage />} />
             <Route path="tickets/:ticketId" element={<TicketDetailPage />} />
             <Route path="context" element={<ClientContextPage />} />
+            <Route path="documents" element={<ClientDocumentsPage />} />
             <Route path="search" element={<SearchPage />} />
             <Route path="assistant" element={<AssistantPage />} />
           </Route>

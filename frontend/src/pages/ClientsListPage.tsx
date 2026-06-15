@@ -5,7 +5,7 @@ import { clientsApi } from '../lib/api';
 import { qk } from '../lib/queryKeys';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import type { Client } from '../lib/types';
-import { IconUsers, IconPlus, IconArrow, IconTrash } from '../components/icons';
+import { IconUsers, IconPlus, IconArrow, IconTrash, IconBook } from '../components/icons';
 
 export function ClientsListPage() {
   const navigate = useNavigate();
@@ -56,6 +56,10 @@ export function ClientsListPage() {
           Le copilote support qui garde le contexte de chaque client. Ouvrez un compte
           ou créez-en un.
         </p>
+        <Link to="/knowledge" className="hero-link">
+          <IconBook size={13} />
+          Base de connaissances
+        </Link>
       </div>
 
       <section className="projects">
@@ -195,6 +199,13 @@ export function ClientsListPage() {
           letter-spacing: -0.012em; margin-bottom: 8px;
         }
         .hero-sub { color: var(--text-3); font-size: 13.5px; line-height: 1.55; }
+        .hero-link {
+          display: inline-flex; align-items: center; gap: 6px;
+          margin-top: 14px; font-size: 12.5px; color: var(--text-2);
+          border: 1px solid var(--border); border-radius: 6px; padding: 5px 10px;
+          transition: border-color 100ms, color 100ms;
+        }
+        .hero-link:hover { border-color: var(--border-strong); color: var(--text); }
 
         .projects { max-width: 580px; width: 100%; }
         .proj-list { list-style: none; display: flex; flex-direction: column; gap: 6px; }

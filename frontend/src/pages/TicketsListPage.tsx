@@ -31,7 +31,7 @@ export function TicketsListPage() {
   });
 
   const createTicket = useMutation({
-    mutationFn: () => ticketsApi.create({ clientId, subject: 'Nouveau ticket', content: '' }),
+    mutationFn: () => ticketsApi.create({ clientId, subject: 'Nouveau ticket' }),
     onSuccess: async ({ ticket }) => {
       await qc.invalidateQueries({ queryKey: qk.tickets(clientId) });
       navigate(`/clients/${clientId}/tickets/${ticket._id}`);

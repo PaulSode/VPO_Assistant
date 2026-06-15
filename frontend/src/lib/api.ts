@@ -10,15 +10,23 @@ import type {
   Client,
   Ticket,
   ClientFact,
+  KnowledgeDoc,
+  KnowledgeScope,
   RagHit,
   TicketStatus,
   TicketPriority,
   TicketChannel,
+  AuthorRole,
   ID,
 } from './types';
 
 const API = import.meta.env.VITE_API_URL ?? 'http://localhost:3001';
 const DEV_USER = import.meta.env.VITE_DEV_USER_ID ?? '';
+
+/** Absolute URL for a stored attachment (its `url` is a server-relative path). */
+export function fileUrl(relUrl: string): string {
+  return `${API}${relUrl}`;
+}
 
 function headers(json = false): HeadersInit {
   const h: Record<string, string> = { Authorization: `Dev ${DEV_USER}` };
@@ -91,7 +99,6 @@ export const ticketsApi = {
   create: (data: {
     clientId: ID;
     subject: string;
-    content?: string;
     reference?: string;
     channel?: TicketChannel;
     priority?: TicketPriority;
@@ -99,13 +106,37 @@ export const ticketsApi = {
     request<{ ticket: Ticket }>('/tickets', {
       method: 'POST',
       headers: headers(true),
-      body: JSON.stringify({ content: '', ...data }),
+      body: JSON.stringify(data),
     }),
-  saveContent: (id: ID, content: string) =>
-    request<{ savedAt: string; analysisVersion: number }>(`/tickets/${id}/content`, {
-      method: 'PUT',
+  addMessage: (
+    id: ID,
+    data: {
+      authorName: string;
+      authorRole: AuthorRole;
+      body: string;
+      attachments?: { filename: string; mime?: string; dataBase64: string }[];
+    },
+  ) =>
+    request<{ ticket: Ticket }>(`/tickets/${id}/messages`, {
+      method: 'POST',
       headers: headers(true),
-      body: JSON.stringify({ content }),
+      body: JSON.stringify(data),
+    }),
+  removeMessage: (id: ID, messageId: ID) =>
+    request<{ ticket: Ticket }>(`/tickets/${id}/messages/${messageId}`, {
+      method: 'DELETE',
+      headers: headers(),
+    }),
+  importMessages: (
+    id: ID,
+    messages: { authorName: string; authorRole: AuthorRole; body: string; at?: string | null }[],
+  ) =>
+    request<{ ticket: Ticket }>(`/tickets/${id}/messages/import`, {
+      method: 'POST',
+      headers: headers(true),
+      body: JSON.stringify({
+        messages: messages.map((m) => ({ ...m, at: m.at ?? undefined })),
+      }),
     }),
   updateMeta: (
     id: ID,
@@ -136,6 +167,29 @@ export const contextApi = {
     request<{ facts: ClientFact[] }>(`/clients/${clientId}/facts`, { headers: headers() }),
   factsForTicket: (ticketId: ID) =>
     request<{ facts: ClientFact[] }>(`/tickets/${ticketId}/facts`, { headers: headers() }),
+};
+
+// ─── Knowledge base ──────────────────────────────────────────────────────────
+
+export const knowledgeApi = {
+  listGlobal: () => request<{ docs: KnowledgeDoc[] }>('/knowledge', { headers: headers() }),
+  listForClient: (clientId: ID) =>
+    request<{ docs: KnowledgeDoc[] }>(`/clients/${clientId}/knowledge`, { headers: headers() }),
+  get: (id: ID) => request<{ doc: KnowledgeDoc }>(`/knowledge/${id}`, { headers: headers() }),
+  create: (data: {
+    scope: KnowledgeScope;
+    clientId?: ID;
+    title: string;
+    content?: string;
+    file?: { filename: string; mime?: string; dataBase64: string };
+  }) =>
+    request<{ doc: KnowledgeDoc }>('/knowledge', {
+      method: 'POST',
+      headers: headers(true),
+      body: JSON.stringify(data),
+    }),
+  remove: (id: ID) =>
+    request<void>(`/knowledge/${id}`, { method: 'DELETE', headers: headers() }),
 };
 
 // ─── Search ─────────────────────────────────────────────────────────────────

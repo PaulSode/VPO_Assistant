@@ -37,12 +37,21 @@ export async function analyzeTicket(args: {
   ticketText: string;
   subject: string;
   clientContext: string;
+  knowledge?: string;
 }): Promise<AnalysisResult> {
+  const knowledgeBlock = args.knowledge?.trim()
+    ? `KNOWLEDGE BASE (reference documentation — use it to find correction angles):
+
+${args.knowledge.trim()}
+
+`
+    : '';
+
   const userMessage = `CLIENT CONTEXT (what we already know — reference it, don't repeat it):
 
 ${args.clientContext || '(empty — first ticket from this client)'}
 
-TICKET
+${knowledgeBlock}TICKET
 - Subject: ${args.subject}
 
 MESSAGE

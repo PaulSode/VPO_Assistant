@@ -6,6 +6,7 @@ import { isOpen } from '../lib/tickets';
 import {
   IconGrid,
   IconFile,
+  IconBook,
   IconUsers,
   IconChat,
   IconChevron,
@@ -78,6 +79,9 @@ export function Sidebar() {
         </SideLink>
         <SideLink to={`/clients/${clientId}/context`} icon={<IconUsers size={15} />}>
           Contexte client
+        </SideLink>
+        <SideLink to={`/clients/${clientId}/documents`} icon={<IconBook size={15} />}>
+          Documents
         </SideLink>
         <SideLink to={`/clients/${clientId}/search`} icon={<IconSearch size={15} />}>
           Recherche

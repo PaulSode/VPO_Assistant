@@ -16,11 +16,35 @@
  */
 
 import { Types } from 'mongoose';
-import { Ticket, Client, ClientFact, Chunk } from '../models/index.js';
+import { Ticket, Client, ClientFact, Chunk, KnowledgeDoc } from '../models/index.js';
 import { analyzeTicket as runAnalysis } from '../ai/analysis.js';
 import { chunkText, embedTexts } from '../ai/embeddings.js';
 import { buildClientContext } from '../ai/prompts.js';
 import { config } from '../config.js';
+import { removeFolder } from '../storage.js';
+
+// ─── Thread helpers ──────────────────────────────────────────────────────────
+export interface ThreadMessage {
+  authorName: string;
+  authorRole: string;
+  body?: string | null;
+  attachments?: { filename: string }[];
+  at?: Date | string;
+}
+
+/** Flatten a ticket conversation into plain text for analysis + embeddings. */
+export function threadToText(messages: ThreadMessage[]): string {
+  return messages
+    .map((m) => {
+      const role = m.authorRole === 'agent' ? 'Agent' : 'Client';
+      const files = (m.attachments ?? []).map((a) => a.filename);
+      const header = `${m.authorName} (${role})`;
+      const parts = [`${header}:`, (m.body ?? '').trim()];
+      if (files.length) parts.push(`[pièces jointes : ${files.join(', ')}]`);
+      return parts.filter(Boolean).join('\n');
+    })
+    .join('\n\n');
+}
 
 // ─── Progress reporting ──────────────────────────────────────────────────────
 /** Ordered phases the editor's stepper renders. */
@@ -53,7 +77,8 @@ export async function analyzeTicket(ticketId: string, opts: AnalyzeOptions = {})
 
   const ticket = await Ticket.findById(ticketId);
   if (!ticket) throw new Error(`Ticket ${ticketId} not found`);
-  if (!ticket.content || ticket.content.trim().length < 20) {
+  const threadText = threadToText(ticket.messages);
+  if (threadText.trim().length < 20) {
     // Too short to analyze meaningfully. Mark as analyzed and bail.
     emit('finalizing');
     ticket.lastAnalyzedVersion = ticket.analysisVersion;
@@ -65,16 +90,18 @@ export async function analyzeTicket(ticketId: string, opts: AnalyzeOptions = {})
   const clientId = ticket.clientId;
   const startVersion = ticket.analysisVersion;
 
-  // 1. Build client context
+  // 1. Build client context + knowledge base
   emit('preparing');
   const clientContext = await buildClientContextSummary(String(clientId));
+  const knowledge = await buildKnowledgeContext(String(clientId));
 
   // 2. Analyze
   emit('analyzing');
   const analysis = await runAnalysis({
-    ticketText: ticket.content,
+    ticketText: threadText,
     subject: ticket.subject,
     clientContext,
+    knowledge,
   });
 
   // 3. Merge client facts. Each step is isolated: a failure in a secondary step
@@ -88,7 +115,7 @@ export async function analyzeTicket(ticketId: string, opts: AnalyzeOptions = {})
   // embeddings API + Atlas) → isolated so it never blocks finalizing.
   emit('indexing');
   await runStep('reindexChunks', () =>
-    reindexChunks(String(clientId), String(ticketId), ticket.content, startVersion),
+    reindexChunks(String(clientId), String(ticketId), threadText, startVersion),
   );
 
   // 5. Persist the analysis onto the ticket.
@@ -131,6 +158,38 @@ async function buildClientContextSummary(clientId: string): Promise<string> {
     client: { name: client.name, company: client.company, notes: client.notes },
     facts: facts.map((f) => ({ category: f.category, key: f.key, value: f.value })),
   });
+}
+
+// ─── Knowledge base context ──────────────────────────────────────────────────
+// Compact reference docs (global + client-scoped) the analysis can reason over.
+// Capped so a large doc set never blows up the prompt.
+const KNOWLEDGE_PER_DOC = 2500;
+const KNOWLEDGE_TOTAL = 9000;
+
+async function buildKnowledgeContext(clientId: string): Promise<string> {
+  const client = await Client.findById(clientId).select('userId').lean();
+  if (!client) return '';
+
+  const docs = await KnowledgeDoc.find({
+    userId: client.userId,
+    $or: [{ scope: 'global' }, { scope: 'client', clientId }],
+  })
+    .select('title content scope')
+    .sort({ scope: 1, updatedAt: -1 })
+    .lean();
+
+  const parts: string[] = [];
+  let budget = KNOWLEDGE_TOTAL;
+  for (const d of docs) {
+    const content = (d.content ?? '').trim();
+    if (!content) continue;
+    const scope = d.scope === 'global' ? 'GLOBAL' : 'CLIENT';
+    const excerpt = content.slice(0, Math.min(KNOWLEDGE_PER_DOC, budget));
+    parts.push(`## [${scope}] ${d.title}\n${excerpt}`);
+    budget -= excerpt.length;
+    if (budget <= 200) break;
+  }
+  return parts.join('\n\n');
 }
 
 // ─── Client facts merge ──────────────────────────────────────────────────────
@@ -199,6 +258,7 @@ export async function cleanupTicketData(clientId: string, ticketId: string): Pro
   await Promise.all([
     ClientFact.deleteMany({ clientId: cid, sourceTicketId: tid }),
     Chunk.deleteMany({ ticketId: tid }),
+    removeFolder(ticketId).catch(() => {}),
   ]);
 }
 
@@ -208,9 +268,21 @@ export async function cleanupTicketData(clientId: string, ticketId: string): Pro
  */
 export async function cleanupClientData(clientId: string): Promise<void> {
   const cid = new Types.ObjectId(clientId);
+
+  // Remove stored files for this client's tickets + client-scoped knowledge docs.
+  const [tickets, docs] = await Promise.all([
+    Ticket.find({ clientId: cid }).select('_id').lean(),
+    KnowledgeDoc.find({ clientId: cid, scope: 'client' }).select('_id').lean(),
+  ]);
+  await Promise.all([
+    ...tickets.map((t) => removeFolder(String(t._id)).catch(() => {})),
+    ...docs.map((d) => removeFolder(`kb-${d._id}`).catch(() => {})),
+  ]);
+
   await Promise.all([
     Ticket.deleteMany({ clientId: cid }),
     ClientFact.deleteMany({ clientId: cid }),
     Chunk.deleteMany({ clientId: cid }),
+    KnowledgeDoc.deleteMany({ clientId: cid, scope: 'client' }),
   ]);
 }

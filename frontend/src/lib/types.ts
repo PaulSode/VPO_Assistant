@@ -28,12 +28,31 @@ export interface TicketAnalysis {
   analyzedModel?: string;
 }
 
+export type AuthorRole = 'customer' | 'agent';
+
+export interface Attachment {
+  filename: string;
+  storedName: string;
+  mime?: string;
+  size?: number;
+  url: string;
+}
+
+export interface TicketMessage {
+  _id: ID;
+  authorName: string;
+  authorRole: AuthorRole;
+  body: string;
+  attachments: Attachment[];
+  at: string;
+}
+
 export interface Ticket {
   _id: ID;
   clientId: ID;
   reference?: string;
   subject: string;
-  content: string;
+  messages: TicketMessage[];
   channel: TicketChannel;
   status: TicketStatus;
   priority: TicketPriority;
@@ -65,6 +84,21 @@ export interface ClientFact {
   confidence: number;
   factuality: 'stated' | 'inferred';
   extractedAt?: string;
+}
+
+export type KnowledgeScope = 'global' | 'client';
+
+export interface KnowledgeDoc {
+  _id: ID;
+  userId: ID;
+  scope: KnowledgeScope;
+  clientId?: ID | null;
+  title: string;
+  content?: string;
+  source: 'text' | 'file';
+  file?: Attachment;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface RagHit {

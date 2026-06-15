@@ -13,6 +13,7 @@ import { z } from 'zod';
 import { Client, Ticket, ClientFact } from '../models/index.js';
 import { streamAssistant, type AssistantMessage } from '../ai/assistant.js';
 import { searchChunks } from '../services/rag.js';
+import { threadToText } from '../services/ticketService.js';
 import { buildClientContext } from '../ai/prompts.js';
 import { requireAuth } from './_auth.js';
 import { startSSE } from './_sse.js';
@@ -49,8 +50,8 @@ export async function assistantRoutes(app: FastifyInstance): Promise<void> {
 
     let currentTicket: { subject: string; content: string } | undefined;
     if (currentTicketId) {
-      const t = await Ticket.findById(currentTicketId).select('subject content').lean();
-      if (t) currentTicket = { subject: t.subject, content: t.content };
+      const t = await Ticket.findById(currentTicketId).select('subject messages').lean();
+      if (t) currentTicket = { subject: t.subject, content: threadToText(t.messages ?? []) };
     }
 
     // RAG: embed the last user message and pull relevant ticket excerpts

@@ -4,6 +4,7 @@ import { Ticket, Client } from '../models/index.js';
 import { requireAuth } from './_auth.js';
 import { startSSE } from './_sse.js';
 import { analyzeTicket, cleanupTicketData } from '../services/ticketService.js';
+import { storeAttachment } from '../storage.js';
 
 // Guards against two overlapping analyses of the same ticket (e.g. two tabs).
 const inFlightAnalyses = new Set<string>();
@@ -11,14 +12,39 @@ const inFlightAnalyses = new Set<string>();
 const createSchema = z.object({
   clientId: z.string().length(24),
   subject: z.string().min(1).max(300),
-  content: z.string().default(''),
   reference: z.string().max(100).optional(),
   channel: z.enum(['email', 'phone', 'chat', 'other']).optional(),
   priority: z.enum(['low', 'medium', 'high', 'urgent']).optional(),
 });
 
-const updateContentSchema = z.object({
-  content: z.string(),
+const importSchema = z.object({
+  messages: z
+    .array(
+      z.object({
+        authorName: z.string().min(1).max(120),
+        authorRole: z.enum(['customer', 'agent']),
+        body: z.string().max(20_000).default(''),
+        at: z.string().optional(), // ISO timestamp; falls back to now if absent/invalid
+      }),
+    )
+    .min(1)
+    .max(300),
+});
+
+const addMessageSchema = z.object({
+  authorName: z.string().min(1).max(120),
+  authorRole: z.enum(['customer', 'agent']),
+  body: z.string().max(20_000).default(''),
+  attachments: z
+    .array(
+      z.object({
+        filename: z.string().min(1).max(255),
+        mime: z.string().max(150).optional(),
+        dataBase64: z.string().min(1),
+      }),
+    )
+    .max(10)
+    .optional(),
 });
 
 const updateMetaSchema = z.object({
@@ -66,7 +92,7 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
     return { ticket };
   });
 
-  // Read ticket (with content)
+  // Read ticket (with the full conversation)
   app.get('/tickets/:id', async (req, reply) => {
     const { id } = req.params as { id: string };
     const ticket = await ensureOwned(req, id);
@@ -74,20 +100,78 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
     return { ticket };
   });
 
-  // Save ticket content
-  app.put('/tickets/:id/content', async (req, reply) => {
+  // Append a message to the ticket conversation (with optional attachments).
+  app.post('/tickets/:id/messages', async (req, reply) => {
     const { id } = req.params as { id: string };
-    const { content } = updateContentSchema.parse(req.body);
+    const body = addMessageSchema.parse(req.body);
+    if (!body.body.trim() && (!body.attachments || body.attachments.length === 0)) {
+      return reply.code(400).send({ error: 'Empty message' });
+    }
     const ticket = await ensureOwned(req, id);
     if (!ticket) return reply.code(404).send({ error: 'Ticket not found' });
 
-    // Only bump the analysis version when the text actually changed.
-    const changed = ticket.content !== content;
-    ticket.content = content;
-    if (changed) ticket.analysisVersion += 1;
+    // Persist any attachments to disk, collect their metadata.
+    const stored = [];
+    for (const att of body.attachments ?? []) {
+      stored.push(
+        await storeAttachment({
+          folder: id,
+          filename: att.filename,
+          mime: att.mime,
+          dataBase64: att.dataBase64,
+        }),
+      );
+    }
+
+    ticket.messages.push({
+      authorName: body.authorName,
+      authorRole: body.authorRole,
+      body: body.body,
+      attachments: stored,
+      at: new Date(),
+    } as never);
+    // New content → re-analysis becomes relevant.
+    ticket.analysisVersion += 1;
     await ticket.save();
 
-    return { savedAt: new Date(), analysisVersion: ticket.analysisVersion };
+    return { ticket };
+  });
+
+  // Bulk-import a parsed conversation (paste / file). Preserves original
+  // timestamps so the imported thread keeps its real chronology.
+  app.post('/tickets/:id/messages/import', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const { messages } = importSchema.parse(req.body);
+    const ticket = await ensureOwned(req, id);
+    if (!ticket) return reply.code(404).send({ error: 'Ticket not found' });
+
+    for (const m of messages) {
+      const at = m.at ? new Date(m.at) : new Date();
+      ticket.messages.push({
+        authorName: m.authorName,
+        authorRole: m.authorRole,
+        body: m.body,
+        attachments: [],
+        at: isNaN(at.getTime()) ? new Date() : at,
+      } as never);
+    }
+    ticket.analysisVersion += 1;
+    await ticket.save();
+    return { ticket };
+  });
+
+  // Remove a message from the conversation.
+  app.delete('/tickets/:id/messages/:messageId', async (req, reply) => {
+    const { id, messageId } = req.params as { id: string; messageId: string };
+    const ticket = await ensureOwned(req, id);
+    if (!ticket) return reply.code(404).send({ error: 'Ticket not found' });
+    const before = ticket.messages.length;
+    ticket.messages = ticket.messages.filter(
+      (m) => String((m as { _id: unknown })._id) !== messageId,
+    ) as typeof ticket.messages;
+    if (ticket.messages.length !== before) ticket.analysisVersion += 1;
+    await ticket.save();
+    return { ticket };
   });
 
   // Manually trigger the AI analysis pipeline for a ticket.

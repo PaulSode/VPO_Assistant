@@ -59,13 +59,39 @@ const ticketAnalysisSchema = new Schema(
   { _id: false },
 );
 
+// One file attached to a ticket message. The binary lives on disk under
+// uploads/<ticketId>/<storedName>; `url` is the public path to fetch it.
+const attachmentSchema = new Schema(
+  {
+    filename: { type: String, required: true }, // original name, shown to the user
+    storedName: { type: String, required: true }, // on-disk name (uuid-prefixed)
+    mime: String,
+    size: Number,
+    url: { type: String, required: true }, // e.g. /files/<ticketId>/<storedName>
+  },
+  { _id: false },
+);
+
+// One message in the ticketing conversation (customer ⇄ agent).
+const ticketMessageSchema = new Schema(
+  {
+    authorName: { type: String, required: true },
+    authorRole: { type: String, enum: ['customer', 'agent'], required: true },
+    body: { type: String, default: '' },
+    attachments: { type: [attachmentSchema], default: [] },
+    at: { type: Date, default: Date.now },
+  },
+  { _id: true },
+);
+
 const ticketSchema = new Schema(
   {
     clientId: { type: Types.ObjectId, ref: 'Client', required: true, index: true },
     /** Free-form reference number — the manual link to the external ticketing tool. */
     reference: String,
     subject: { type: String, required: true },
-    content: { type: String, default: '' }, // the customer's message
+    /** The ticketing conversation: customer and agent messages, with attachments. */
+    messages: { type: [ticketMessageSchema], default: [] },
     channel: {
       type: String,
       enum: ['email', 'phone', 'chat', 'other'],
@@ -123,6 +149,40 @@ const clientFactSchema = new Schema(
 );
 clientFactSchema.index({ clientId: 1, category: 1 });
 export const ClientFact = model('ClientFact', clientFactSchema);
+
+// ─── KnowledgeDoc (knowledge base) ───────────────────────────────────────────
+// Reference material the AI can consult during analysis to find correction
+// angles (tool docs, guides, internal rules…). Two scopes:
+//   - 'global'  : shared across all of an agent's clients (owned by userId)
+//   - 'client'  : specific to one client (clientId set)
+const knowledgeDocSchema = new Schema(
+  {
+    userId: { type: Types.ObjectId, ref: 'User', required: true, index: true },
+    scope: { type: String, enum: ['global', 'client'], required: true },
+    clientId: { type: Types.ObjectId, ref: 'Client', default: null, index: true },
+    title: { type: String, required: true },
+    /** Plain-text content the AI reads (pasted, or extracted from a text file). */
+    content: { type: String, default: '' },
+    source: { type: String, enum: ['text', 'file'], default: 'text' },
+    /** Original uploaded file, when the doc came from one. */
+    file: {
+      type: new Schema(
+        {
+          filename: String,
+          storedName: String,
+          mime: String,
+          size: Number,
+          url: String,
+        },
+        { _id: false },
+      ),
+      default: undefined,
+    },
+  },
+  { timestamps: true },
+);
+knowledgeDocSchema.index({ userId: 1, scope: 1, updatedAt: -1 });
+export const KnowledgeDoc = model('KnowledgeDoc', knowledgeDocSchema);
 
 // ─── Chunk (text + vector for RAG) ───────────────────────────────────────────
 // Atlas Vector Search index must be created on this collection separately;

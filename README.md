@@ -15,6 +15,7 @@ Le lien avec votre outil de ticketing se fait **manuellement** (champ « référ
 - **Espace par client** — chaque client a ses tickets, son contexte et son assistant dédiés.
 - **Analyse de ticket à la demande** — un clic « Analyser » lance le pipeline IA : catégorie, priorité, sentiment, résumé, **réponse suggérée** (copiable) et **prochaines étapes**.
 - **Contexte client vivant** — l'IA extrait à chaque analyse les faits durables sur le client (plan, produit, OS, interlocuteurs…) et les accumule dans une fiche consultable.
+- **Base de connaissances** — documents de référence **globaux** (documentation outil, guides, règles) et **par client** (texte collé ou fichier). L'IA les consulte pendant l'analyse pour proposer des angles de correction (filtre mal configuré, règle non appliquée…).
 - **Suivi** — statut (nouveau, en cours, en attente, résolu, clos) et priorité éditables, badges dans la liste des tickets.
 - **Recherche sémantique** — retrouver un passage des tickets d'un client par le sens, pas par mot-clé exact.
 - **Assistant conversationnel** — poser des questions sur l'historique du client ou faire rédiger un brouillon de réponse, en streaming, avec les tickets sources cités.
@@ -33,20 +34,23 @@ vpo-assistant/
 
 | Couche | Modèle | Rôle |
 |---|---|---|
-| Texte brut | `Ticket.content` | Le message du client, source de vérité |
+| Conversation | `Ticket.messages` | Le fil client ⇄ agent (corps + pièces jointes), source de vérité |
 | Structuré | `ClientFact` | Faits durables extraits par l'IA, ancrés au ticket source |
 | Vectoriel | `Chunk` | Index sémantique (RAG) par client |
 
 - **`User`** — l'agent de support (multi-utilisateur via `userId`).
 - **`Client`** — un compte client : nom, société, contact, **notes** libres de l'agent.
-- **`Ticket`** — `subject`, `content`, `reference` (lien manuel vers le ticketing), `status`, `priority`, `category`, et le sous-document **`analysis`** (résumé, sentiment, réponse suggérée, étapes).
+- **`Ticket`** — `subject`, `reference` (lien manuel vers le ticketing), `status`, `priority`, `category`, le fil **`messages`** (chaque message : auteur, rôle `customer`/`agent`, corps, **pièces jointes**) et le sous-document **`analysis`** (résumé, sentiment, réponse suggérée, étapes).
 - **`ClientFact`** — un fait durable (`category`, `key`, `value`) ancré sur `sourceTicketId` → ré-analyser un ticket ne crée jamais de doublon.
+- **`KnowledgeDoc`** — un document de référence : `scope` (`global` ou `client`), `title`, `content` (texte lu par l'IA), `file` optionnel. Les fichiers texte sont décodés automatiquement ; l'analyse injecte un extrait plafonné des docs pertinents dans le prompt.
+
+Les pièces jointes (xlsx, docx, captures…) sont stockées sur disque sous `backend/uploads/` et servies via `GET /files/:ticketId/:stored`.
 
 ### Pipeline d'analyse — déclenché **manuellement** (bouton « Analyser le ticket »)
 
 ```
-PUT  /v1/tickets/:id/content   → sauvegarde le texte (aucun appel IA, gratuit)
-POST /v1/tickets/:id/analyze   → lance le pipeline et STREAME sa progression (SSE) :
+POST /v1/tickets/:id/messages  → ajoute un message au fil (corps + pièces jointes)
+POST /v1/tickets/:id/analyze   → lance le pipeline sur tout le fil et STREAME (SSE) :
   0. preparing    Compiler le contexte client (faits + notes)
   1. analyzing    Analyser le ticket (Sonnet + tool_use) → classement, réponse, faits
   2. context      Fusionner les faits client (idempotent par ticket)
@@ -127,12 +131,12 @@ npm run dev       # http://localhost:5173
 
 ## Démo en 6 étapes (à présenter)
 
-1. Créer un **client**.
-2. Créer un **ticket** et y coller un message client.
-3. Cliquer **Analyser** → observer le stepper, puis catégorie / priorité / résumé / **réponse suggérée** / étapes.
-4. Ajuster le **statut** (suivi).
+1. Créer un **client** (depuis l'accueil), puis ouvrir son **tableau de bord**.
+2. Créer un **ticket** et alimenter le **fil de discussion** : messages côté client/agent, avec **pièces jointes** (xlsx, captures…).
+3. Cliquer **Analyser** → observer le stepper, puis (panneau latéral) catégorie / priorité / résumé, et (onglet **Assistant IA** au centre) la **réponse suggérée** + étapes.
+4. Ajuster le **statut** / **priorité** (suivi, panneau latéral).
 5. Ouvrir **Contexte client** → les faits extraits s'y sont accumulés.
-6. Poser une question dans l'**Assistant** (réponse en streaming citant les tickets).
+6. Dans l'onglet **Assistant IA** du ticket, poser une question (réponse en streaming, citant les tickets) ou cliquer **Ajouter au fil** pour insérer la réponse suggérée.
 
 ---
 

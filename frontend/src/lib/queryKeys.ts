@@ -15,4 +15,6 @@ export const qk = {
   facts: (clientId: string) => ['facts', clientId] as const,
   factsForTicket: (ticketId: string) => ['facts', 'ticket', ticketId] as const,
   search: (clientId: string, query: string) => ['search', clientId, query] as const,
+  knowledgeGlobal: () => ['knowledge', 'global'] as const,
+  knowledgeClient: (clientId: string) => ['knowledge', 'client', clientId] as const,
 };

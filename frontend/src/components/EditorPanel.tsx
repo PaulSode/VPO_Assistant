@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ticketsApi, contextApi } from '../lib/api';
 import { qk } from '../lib/queryKeys';
@@ -46,7 +45,6 @@ export function EditorPanel({
   const ticketId = ticket._id;
   const clientId = ticket.clientId;
   const qc = useQueryClient();
-  const [copied, setCopied] = useState(false);
 
   const factsQ = useQuery({
     queryKey: qk.factsForTicket(ticketId),
@@ -79,22 +77,11 @@ export function EditorPanel({
 
   const analysisDisplay = (() => {
     if (analyzing) return 'analyse en cours…';
-    if (!ticket.content || ticket.content.trim().length === 0) return '—';
+    if (ticket.messages.length === 0) return '—';
     if (hasUnanalyzed) return 'modifications non analysées';
     if (ticket.lastAnalyzedAt) return `à jour · ${formatRelative(ticket.lastAnalyzedAt)}`;
     return 'jamais analysé';
   })();
-
-  const copyReply = async () => {
-    if (!analysis?.suggestedReply) return;
-    try {
-      await navigator.clipboard.writeText(analysis.suggestedReply);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1600);
-    } catch {
-      /* clipboard unavailable */
-    }
-  };
 
   return (
     <aside className="panel">
@@ -159,7 +146,7 @@ export function EditorPanel({
               <button
                 className={`analyze-btn${hasUnanalyzed ? ' primary' : ''}`}
                 onClick={onAnalyze}
-                disabled={!ticket.content || ticket.content.trim().length === 0 || !hasUnanalyzed}
+                disabled={ticket.messages.length === 0 || !hasUnanalyzed}
               >
                 <IconSparkle size={13} />
                 {hasUnanalyzed ? 'Analyser le ticket' : 'Ticket à jour'}
@@ -190,30 +177,6 @@ export function EditorPanel({
                     </span>
                   </div>
                 )}
-              </div>
-            )}
-
-            {analysis.suggestedReply && (
-              <div className="psection">
-                <div className="psection-label">
-                  Réponse suggérée
-                  <button className="copy-btn" onClick={() => void copyReply()}>
-                    {copied ? <IconCheck size={11} /> : null}
-                    {copied ? 'Copié' : 'Copier'}
-                  </button>
-                </div>
-                <div className="reply-box">{analysis.suggestedReply}</div>
-              </div>
-            )}
-
-            {analysis.nextSteps && analysis.nextSteps.length > 0 && (
-              <div className="psection">
-                <div className="psection-label">Prochaines étapes</div>
-                <ul className="steps">
-                  {analysis.nextSteps.map((s, i) => (
-                    <li key={i}>{s}</li>
-                  ))}
-                </ul>
               </div>
             )}
 

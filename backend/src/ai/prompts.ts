@@ -41,9 +41,18 @@ CRITICAL RULES
   same fact reuses the same key across tickets. Copy a short supporting quote (max 20
   words) for each. Mark factuality 'stated' (written explicitly) or 'inferred'.
 
+KNOWLEDGE BASE
+- The user message may include reference documentation (tool guides, configuration
+  rules, internal procedures). When it does, USE IT to find concrete correction
+  angles: a misconfigured filter, a rule not applied, a known limitation, a documented
+  procedure to follow. Ground the suggested reply and next steps in this documentation
+  when relevant, and refer to the document by name. Never invent rules that aren't in
+  the provided docs or the ticket.
+
 The user message will provide:
   1. A compact summary of what we already know about the client
-  2. The ticket subject + body
+  2. Optional reference documentation (knowledge base)
+  3. The ticket subject + body
 
 Respond by calling the record_analysis tool. No prose.`;
 
