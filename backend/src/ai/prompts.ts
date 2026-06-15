@@ -42,16 +42,21 @@ CRITICAL RULES
   words) for each. Mark factuality 'stated' (written explicitly) or 'inferred'.
 
 KNOWLEDGE BASE
-- The user message may include reference documentation (tool guides, configuration
-  rules, internal procedures). When it does, USE IT to find concrete correction
-  angles: a misconfigured filter, a rule not applied, a known limitation, a documented
-  procedure to follow. Ground the suggested reply and next steps in this documentation
-  when relevant, and refer to the document by name. Never invent rules that aren't in
-  the provided docs or the ticket.
+- The user message may include an INDEX of reference documents (id, title,
+  description) — tool guides, configuration rules, internal procedures. The index
+  lists what's available WITHOUT the full text.
+- If one or more documents look relevant to diagnosing or resolving THIS ticket, call
+  the fetch_documents tool with their ids to read them BEFORE answering. Fetch only
+  what is clearly relevant — never fetch everything "just in case".
+- Use what you read to find concrete correction angles: a misconfigured filter, a rule
+  not applied, a known limitation, a documented procedure. Ground the suggested reply
+  and next steps in the documentation, and refer to the document by title. Never invent
+  rules that aren't in the docs or the ticket.
+- If no document is relevant, go straight to record_analysis.
 
 The user message will provide:
   1. A compact summary of what we already know about the client
-  2. Optional reference documentation (knowledge base)
+  2. An optional index of available reference documents
   3. The ticket subject + body
 
 Respond by calling the record_analysis tool. No prose.`;
@@ -109,6 +114,26 @@ export const ANALYSIS_TOOL: Anthropic.Tool = {
       },
     },
     required: ['category', 'priority', 'sentiment', 'summary', 'suggestedReply', 'nextSteps', 'facts'],
+  },
+};
+
+// ─── Knowledge fetch tool ─────────────────────────────────────────────────────
+// Lets the analysis model pull the full text of relevant documents on demand,
+// instead of loading every document into every request.
+export const FETCH_DOCUMENTS_TOOL: Anthropic.Tool = {
+  name: 'fetch_documents',
+  description:
+    'Load the full text of one or more reference documents from the index, by id, when they look relevant to resolving the ticket. Returns their content so you can ground your analysis in it.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      documentIds: {
+        type: 'array',
+        description: 'Ids of the documents to read, taken from the provided index.',
+        items: { type: 'string' },
+      },
+    },
+    required: ['documentIds'],
   },
 };
 

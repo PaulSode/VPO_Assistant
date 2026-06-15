@@ -94,6 +94,7 @@ export interface KnowledgeDoc {
   scope: KnowledgeScope;
   clientId?: ID | null;
   title: string;
+  description?: string;
   content?: string;
   source: 'text' | 'file';
   file?: Attachment;

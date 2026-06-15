@@ -19,6 +19,7 @@ interface Props {
 export function AddDocumentDialog({ scope, clientId, onClose }: Props) {
   const qc = useQueryClient();
   const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
   const [content, setContent] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -32,6 +33,7 @@ export function AddDocumentDialog({ scope, clientId, onClose }: Props) {
         scope,
         clientId,
         title: title.trim(),
+        description: description.trim() || undefined,
         content: content.trim() || undefined,
         file: filePayload,
       });
@@ -73,6 +75,16 @@ export function AddDocumentDialog({ scope, clientId, onClose }: Props) {
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="ex. Guide de configuration des filtres"
+        />
+
+        <label className="fld-label" style={{ marginTop: 12 }}>
+          Description courte <span className="fld-opt">— aide l'IA à savoir quand consulter ce document</span>
+        </label>
+        <input
+          className="fld-input"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="ex. Règles de nommage et préfixes des références contrats"
         />
 
         <label className="fld-label" style={{ marginTop: 12 }}>Contenu (texte)</label>
@@ -120,6 +132,7 @@ export function AddDocumentDialog({ scope, clientId, onClose }: Props) {
 
         <style>{`
           .fld-label { display: block; font-size: 11.5px; color: var(--text-3); margin-bottom: 6px; }
+          .fld-opt { color: var(--text-4); }
           .fld-input {
             width: 100%; background: var(--bg); border: 1px solid var(--border);
             border-radius: 7px; padding: 8px 11px; color: var(--text);

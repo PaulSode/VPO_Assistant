@@ -29,6 +29,7 @@ const createSchema = z
     scope: z.enum(['global', 'client']),
     clientId: z.string().length(24).optional(),
     title: z.string().min(1).max(200),
+    description: z.string().max(500).optional(),
     content: z.string().max(MAX_CONTENT).optional(),
     file: fileSchema.optional(),
   })
@@ -38,6 +39,7 @@ const createSchema = z
 
 const updateSchema = z.object({
   title: z.string().min(1).max(200).optional(),
+  description: z.string().max(500).optional(),
   content: z.string().max(MAX_CONTENT).optional(),
 });
 
@@ -93,6 +95,7 @@ export async function knowledgeRoutes(app: FastifyInstance): Promise<void> {
       scope: body.scope,
       clientId: body.scope === 'client' ? body.clientId : null,
       title: body.title,
+      description: body.description ?? '',
       content,
       source: body.file ? 'file' : 'text',
     });

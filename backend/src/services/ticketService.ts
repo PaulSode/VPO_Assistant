@@ -17,7 +17,11 @@
 
 import { Types } from 'mongoose';
 import { Ticket, Client, ClientFact, Chunk, KnowledgeDoc } from '../models/index.js';
-import { analyzeTicket as runAnalysis } from '../ai/analysis.js';
+import {
+  analyzeTicket as runAnalysis,
+  type KnowledgeIndexItem,
+  type LoadedDoc,
+} from '../ai/analysis.js';
 import { chunkText, embedTexts } from '../ai/embeddings.js';
 import { buildClientContext } from '../ai/prompts.js';
 import { config } from '../config.js';
@@ -90,10 +94,13 @@ export async function analyzeTicket(ticketId: string, opts: AnalyzeOptions = {})
   const clientId = ticket.clientId;
   const startVersion = ticket.analysisVersion;
 
-  // 1. Build client context + knowledge base
+  // 1. Build client context + knowledge index (titles/descriptions only — the
+  //    model fetches full content on demand for the few relevant docs).
   emit('preparing');
   const clientContext = await buildClientContextSummary(String(clientId));
-  const knowledge = await buildKnowledgeContext(String(clientId));
+  const client = await Client.findById(clientId).select('userId').lean();
+  const userId = client ? String(client.userId) : '';
+  const knowledgeIndex = userId ? await buildKnowledgeIndex(userId, String(clientId)) : [];
 
   // 2. Analyze
   emit('analyzing');
@@ -101,7 +108,8 @@ export async function analyzeTicket(ticketId: string, opts: AnalyzeOptions = {})
     ticketText: threadText,
     subject: ticket.subject,
     clientContext,
-    knowledge,
+    knowledgeIndex,
+    loadDocuments: (ids) => loadKnowledgeDocs(userId, ids),
   });
 
   // 3. Merge client facts. Each step is isolated: a failure in a secondary step
@@ -160,36 +168,45 @@ async function buildClientContextSummary(clientId: string): Promise<string> {
   });
 }
 
-// ─── Knowledge base context ──────────────────────────────────────────────────
-// Compact reference docs (global + client-scoped) the analysis can reason over.
-// Capped so a large doc set never blows up the prompt.
-const KNOWLEDGE_PER_DOC = 2500;
-const KNOWLEDGE_TOTAL = 9000;
+// ─── Knowledge base (index + on-demand loader) ───────────────────────────────
+// We send the model a lightweight index (title + description) and let it fetch
+// the full content of only the relevant documents — instead of loading them all
+// into every analysis request.
+const KNOWLEDGE_INDEX_MAX = 200; // cap the index size for very large doc sets
+const KNOWLEDGE_PER_DOC = 6000; // per-document content cap when fetched
 
-async function buildKnowledgeContext(clientId: string): Promise<string> {
-  const client = await Client.findById(clientId).select('userId').lean();
-  if (!client) return '';
-
+async function buildKnowledgeIndex(
+  userId: string,
+  clientId: string,
+): Promise<KnowledgeIndexItem[]> {
   const docs = await KnowledgeDoc.find({
-    userId: client.userId,
+    userId,
     $or: [{ scope: 'global' }, { scope: 'client', clientId }],
   })
-    .select('title content scope')
+    .select('title description scope')
     .sort({ scope: 1, updatedAt: -1 })
+    .limit(KNOWLEDGE_INDEX_MAX)
     .lean();
 
-  const parts: string[] = [];
-  let budget = KNOWLEDGE_TOTAL;
-  for (const d of docs) {
-    const content = (d.content ?? '').trim();
-    if (!content) continue;
-    const scope = d.scope === 'global' ? 'GLOBAL' : 'CLIENT';
-    const excerpt = content.slice(0, Math.min(KNOWLEDGE_PER_DOC, budget));
-    parts.push(`## [${scope}] ${d.title}\n${excerpt}`);
-    budget -= excerpt.length;
-    if (budget <= 200) break;
-  }
-  return parts.join('\n\n');
+  return docs.map((d) => ({
+    id: String(d._id),
+    title: d.title,
+    description: d.description ?? '',
+    scope: d.scope as 'global' | 'client',
+  }));
+}
+
+async function loadKnowledgeDocs(userId: string, ids: string[]): Promise<LoadedDoc[]> {
+  const valid = ids.filter((id) => /^[a-fA-F0-9]{24}$/.test(id));
+  if (valid.length === 0) return [];
+  const docs = await KnowledgeDoc.find({ _id: { $in: valid }, userId })
+    .select('title content')
+    .lean();
+  return docs.map((d) => ({
+    id: String(d._id),
+    title: d.title,
+    content: (d.content ?? '').slice(0, KNOWLEDGE_PER_DOC),
+  }));
 }
 
 // ─── Client facts merge ──────────────────────────────────────────────────────

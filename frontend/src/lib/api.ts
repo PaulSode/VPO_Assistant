@@ -180,6 +180,7 @@ export const knowledgeApi = {
     scope: KnowledgeScope;
     clientId?: ID;
     title: string;
+    description?: string;
     content?: string;
     file?: { filename: string; mime?: string; dataBase64: string };
   }) =>

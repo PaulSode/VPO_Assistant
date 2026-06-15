@@ -42,7 +42,7 @@ vpo-assistant/
 - **`Client`** — un compte client : nom, société, contact, **notes** libres de l'agent.
 - **`Ticket`** — `subject`, `reference` (lien manuel vers le ticketing), `status`, `priority`, `category`, le fil **`messages`** (chaque message : auteur, rôle `customer`/`agent`, corps, **pièces jointes**) et le sous-document **`analysis`** (résumé, sentiment, réponse suggérée, étapes).
 - **`ClientFact`** — un fait durable (`category`, `key`, `value`) ancré sur `sourceTicketId` → ré-analyser un ticket ne crée jamais de doublon.
-- **`KnowledgeDoc`** — un document de référence : `scope` (`global` ou `client`), `title`, `content` (texte lu par l'IA), `file` optionnel. Les fichiers texte sont décodés automatiquement ; l'analyse injecte un extrait plafonné des docs pertinents dans le prompt.
+- **`KnowledgeDoc`** — un document de référence : `scope` (`global` ou `client`), `title`, `description` (courte, fournie à l'ajout), `content` (texte lu par l'IA), `file` optionnel. Les fichiers texte sont décodés automatiquement. **Coût maîtrisé** : l'analyse n'envoie qu'un **index léger** (titre + description) de tous les documents ; le modèle charge le **contenu complet à la demande** (outil `fetch_documents`) des seuls documents pertinents, au lieu de tout injecter à chaque requête.
 
 Les pièces jointes (xlsx, docx, captures…) sont stockées sur disque sous `backend/uploads/` et servies via `GET /files/:ticketId/:stored`.
 

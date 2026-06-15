@@ -59,6 +59,7 @@ export function KnowledgeManager({ scope, clientId }: Props) {
               <span className="kb-ico"><IconFile size={15} /></span>
               <div className="kb-body">
                 <div className="kb-title">{d.title}</div>
+                {d.description && <div className="kb-desc">{d.description}</div>}
                 <div className="kb-meta">
                   <span className={`badge ${d.source === 'file' ? 'p-medium' : 's-new'}`}>
                     {d.source === 'file' ? 'fichier' : 'texte'}
@@ -116,6 +117,7 @@ export function KnowledgeManager({ scope, clientId }: Props) {
         }
         .kb-body { flex: 1; min-width: 0; }
         .kb-title { font-size: 13.5px; font-weight: 500; color: var(--text); }
+        .kb-desc { font-size: 12px; color: var(--text-2); margin-top: 2px; line-height: 1.45; }
         .kb-meta { display: flex; align-items: center; gap: 10px; margin-top: 4px; flex-wrap: wrap; }
         .kb-file { font-size: 12px; color: var(--text-2); }
         .kb-file:hover { color: var(--accent); }

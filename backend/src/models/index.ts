@@ -161,6 +161,9 @@ const knowledgeDocSchema = new Schema(
     scope: { type: String, enum: ['global', 'client'], required: true },
     clientId: { type: Types.ObjectId, ref: 'Client', default: null, index: true },
     title: { type: String, required: true },
+    /** Short, agent-written summary of what the doc covers — shown in the AI's
+     * document index so it can decide whether to load the full content. */
+    description: { type: String, default: '' },
     /** Plain-text content the AI reads (pasted, or extracted from a text file). */
     content: { type: String, default: '' },
     source: { type: String, enum: ['text', 'file'], default: 'text' },
